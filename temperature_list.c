@@ -1,72 +1,91 @@
-/*
- * temperature_list.c
- * Syllabus concept demonstrated: singly linked list + dynamic memory allocation.
- * Each node stores one maximum-temperature reading (Tmax).
- */
+
+#include <stdio.h>
 #include <stdlib.h>
 
-typedef struct TemperatureNode {
-    double tmax;
-    struct TemperatureNode *next;
-} TemperatureNode;
+#define REGIONS 7
 
-/*
- * Build a linked list from the input array, calculate mean, maximum and
- * number of readings at/above threshold, then free every allocated node.
- * Returns 0 on success, -1 for invalid input, -2 on allocation failure.
- */
-int analyze_temperatures(const double *values, int count, double threshold,
-                         double *mean_out, double *maximum_out,
-                         int *threshold_count_out) {
-    if (values == NULL || count <= 0 || mean_out == NULL ||
-        maximum_out == NULL || threshold_count_out == NULL) {
-        return -1;
-    }
+typedef struct {
+    int date;
+    double lat, lon, tmax;
+} Reading;
 
-    TemperatureNode *head = NULL;
-    TemperatureNode *tail = NULL;
-    double sum = 0.0;
-    double maximum = values[0];
-    int threshold_count = 0;
+typedef struct Node {
+    Reading data;
+    struct Node *left, *right;
+} Node;
 
-    for (int i = 0; i < count; i++) {
-        TemperatureNode *node = (TemperatureNode *)malloc(sizeof(TemperatureNode));
-        if (node == NULL) {
-            TemperatureNode *current = head;
-            while (current != NULL) {
-                TemperatureNode *next = current->next;
-                free(current);
-                current = next;
-            }
-            return -2;
-        }
+Node *root[REGIONS] = {NULL};
 
-        node->tmax = values[i];
-        node->next = NULL;
+int compare(Reading a, Reading b) {
+    if (a.date != b.date)
+        return a.date < b.date ? -1 : 1;
 
-        if (head == NULL) {
-            head = node;
-            tail = node;
-        } else {
-            tail->next = node;
-            tail = node;
-        }
+    if (a.lat != b.lat)
+        return a.lat < b.lat ? -1 : 1;
 
-        sum += values[i];
-        if (values[i] > maximum) maximum = values[i];
-        if (values[i] >= threshold) threshold_count++;
-    }
-
-    *mean_out = sum / count;
-    *maximum_out = maximum;
-    *threshold_count_out = threshold_count;
-
-    TemperatureNode *current = head;
-    while (current != NULL) {
-        TemperatureNode *next = current->next;
-        free(current);
-        current = next;
-    }
+    if (a.lon != b.lon)
+        return a.lon < b.lon ? -1 : 1;
 
     return 0;
+}
+
+Node *insert(Node *r, Reading x) {
+    if (r == NULL) {
+        Node *n = malloc(sizeof(Node));
+
+        if (n == NULL)
+            return NULL;
+
+        n->data = x;
+        n->left = NULL;
+        n->right = NULL;
+
+        return n;
+    }
+
+    int c = compare(x, r->data);
+
+    if (c < 0)
+        r->left = insert(r->left, x);
+    else if (c > 0)
+        r->right = insert(r->right, x);
+    else
+        r->data = x;
+
+    return r;
+}
+
+void addReading(int region, int date,
+                double lat, double lon, double temp) {
+    if (region < 0 || region >= REGIONS)
+        return;
+
+    Reading x = {date, lat, lon, temp};
+    root[region] = insert(root[region], x);
+}
+
+void rangeQuery(Node *r, int start, int end) {
+    if (r == NULL)
+        return;
+
+    if (r->data.date >= start)
+        rangeQuery(r->left, start, end);
+
+    if (r->data.date >= start && r->data.date <= end) {
+        printf("%d,%.2f,%.2f,%.2f\n",
+               r->data.date,
+               r->data.lat,
+               r->data.lon,
+               r->data.tmax);
+    }
+
+    if (r->data.date <= end)
+        rangeQuery(r->right, start, end);
+}
+
+void queryRegion(int region, int start, int end) {
+    if (region < 0 || region >= REGIONS)
+        return;
+
+    rangeQuery(root[region], start, end);
 }
